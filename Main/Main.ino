@@ -1,12 +1,9 @@
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecure.h>
 #include <UniversalTelegramBot.h>
-
 #include <Servo.h>
 
-Servo myservo;          // Create a Servo object
-bool hasMoved = false;  // Flag to track if the servo has already moved
-int servoPin = 16;
+#define SERVO_PIN 16
 
 // Wifi network station credentials
 #define WIFI_SSID "<ChangeItToYourWifiName>"
@@ -16,50 +13,46 @@ int servoPin = 16;
 #define BOT_TOKEN "<ChangeIt>"
 #define CHAT_ID "<ChangeIt>"
 
-const unsigned long BOT_MTBS = 1000;  // mean time between scan messages
+#define SERVO_ANGLE_OPEN 100
+#define SERVO_ANGLE_CLOSED 0 
+#define DELAY_TIME 1200
+
+const unsigned long SCAN_MESSAGE_DELAY = 1000;  // mean time between scan messages
+
+Servo my_servo;          // Create a Servo object
+bool has_moved = false;  // Flag to track if the servo has already moved
+unsigned long bot_last_time;  // last time messages' scan has been done
 
 WiFiClientSecure secured_client;
 UniversalTelegramBot bot(BOT_TOKEN, secured_client);
-unsigned long bot_lasttime;  // last time messages' scan has been done
 
-const int ledPin = 2;  // Desired GPIO pin (e.g., D2)
-// int ledStatus = 0;
+void HandleNewMessages(int num_of_new_msgs) {
 
-void handleNewMessages(int numNewMessages) {
+  for (int i = 0; i < num_of_new_msgs; i++) {
 
-  Serial.print("handleNewMessages ");
-  Serial.println(numNewMessages);
-
-  for (int i = 0; i < numNewMessages; i++) {
     String chat_id = String(bot.messages[i].chat_id);
-    if (chat_id != CHAT_ID) {
-      bot.sendMessage(chat_id, "Unauthorized user", "");
+    if (strcmp(chat_id.c_str(), String(CHAT_ID).c_str()) != 0) {
+        bot.sendMessage(chat_id, "Unauthorized user", "");
     } else {
       String text = bot.messages[i].text;
-
-      // Printing for debugging purposes
-      Serial.println("text = ");
-      Serial.println(text);
-
       String from_name = bot.messages[i].from_name;
 
-      // Printing for debugging purposes
-      Serial.println("from_name = ");
-      Serial.println(from_name);
 
-      if (from_name == "")
+      if (strcmp(from_name.c_str(), "") == 0) {
+        // Strings are equal, so set from_name to "Guest"
         from_name = "Guest";
+      }
 
-      if (text == "/click") {
+      if (strcmp(text.c_str(), "/click") == 0) {
         // Servo program:
-        myservo.write(50 * 2);
-        delay(1200);
-        myservo.write(0);
+        my_servo.write(SERVO_ANGLE_OPEN);
+        delay(DELAY_TIME);
+        my_servo.write(SERVO_ANGLE_CLOSED);
 
       }
 
-      if (text == "/start") {
-        String welcome_msg = "Welcome to the Intercom Click Button Bot., " + from_name + ".\n";
+      if (strcmp(text.c_str(), "/start") == 0) {
+        String welcome_msg = "Hey " + from_name + ",Welcome to the Intercom Click Button Bot.\n";
         welcome_msg += "/click : to open the door\n";
 
         // Printing welcome_msg in the chat bot
@@ -69,16 +62,23 @@ void handleNewMessages(int numNewMessages) {
   }
 }
 
-void setup() {
-  myservo.attach(servoPin);
-  myservo.write(0);
+const int INITIAL_SERVO_ANGLE = 0; 
+const int SERIAL_BAUD_RATE = 115200;
+const int LED_PIN = 2;  // Desired GPIO pin (e.g., D2)
+const int PIN_SETUP_DELAY = 10; // Reflecting that it is a delay used during pin setup.
+const int WIFI_CONNECT_DELAY = 500;
 
-  Serial.begin(115200);
+void setup() {
+  my_servo.attach(SERVO_PIN);
+  my_servo.write(INITIAL_SERVO_ANGLE);
+
+  Serial.begin(SERIAL_BAUD_RATE);
   Serial.println();
 
-  pinMode(ledPin, OUTPUT);  // initialize digital ledPin as an output.
-  delay(10);
-  digitalWrite(ledPin, LOW);  // initialize pin as off (active LOW)
+
+  pinMode(LED_PIN, OUTPUT);  // initialize digital LED_PIN as an output.
+  delay(PIN_SETUP_DELAY);
+  digitalWrite(LED_PIN, LOW);  // initialize pin as off (active LOW)
 
   // attempt to connect to Wifi network:
   Serial.print("Connecting to Wifi SSID ");
@@ -87,22 +87,22 @@ void setup() {
   secured_client.setInsecure();  // Use insecure connection for Telegram
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
-    delay(500);
+    delay(WIFI_CONNECT_DELAY);
   }
   Serial.print("\nWiFi connected. IP address: ");
   Serial.println(WiFi.localIP());
 }
 
 void loop() {
-  if (millis() - bot_lasttime > BOT_MTBS) {
-    int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+  if (millis() - bot_last_time > SCAN_MESSAGE_DELAY) {
+    int num_of_new_msgs = bot.getUpdates(bot.last_message_received + 1);
 
-    while (numNewMessages) {
+    while (num_of_new_msgs > 0) {
       Serial.println("got response");
-      handleNewMessages(numNewMessages);
-      numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+      HandleNewMessages(num_of_new_msgs);
+      num_of_new_msgs = bot.getUpdates(bot.last_message_received + 1);
     }
 
-    bot_lasttime = millis();
+    bot_last_time = millis();
   }
 }
