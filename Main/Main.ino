@@ -4,7 +4,6 @@
 #include <Servo.h>
 
 #define SERVO_PIN 16
-// const int SERVO_PIN = 16;
 
 // Wifi network station credentials
 #define WIFI_SSID "<ChangeItToYourWifiName>"
